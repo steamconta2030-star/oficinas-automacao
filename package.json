@@ -8,7 +8,8 @@
     "build": "vite build && tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "check": "npm run lint && npm run test && npm run build",
+    "metrics": "node scripts/code-metrics.mjs",
+    "check": "npm run lint && npm run test && npm run build && npm run metrics",
     "preview": "vite preview"
   },
   "dependencies": {
