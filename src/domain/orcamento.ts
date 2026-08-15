@@ -6,8 +6,12 @@ export function validarItensOrcamento(itens: OrcamentoItem[]) {
 
   for (const item of itens) {
     if (!item.descricao.trim()) throw new Error('Todo item precisa de descrição.')
-    if (item.quantidade <= 0) throw new Error('A quantidade precisa ser maior que zero.')
-    if (item.valorUnitario < 0) throw new Error('O valor unitário não pode ser negativo.')
+    if (!Number.isInteger(item.quantidade) || item.quantidade <= 0) {
+      throw new Error('A quantidade precisa ser inteira e maior que zero.')
+    }
+    if (!Number.isFinite(item.valorUnitario) || item.valorUnitario < 0) {
+      throw new Error('O valor unitário precisa ser válido e não pode ser negativo.')
+    }
   }
 
   return calcularTotalOrcamento(itens)
