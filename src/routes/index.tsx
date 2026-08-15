@@ -1,7 +1,9 @@
-import { useSyncExternalStore } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { ArrowRight, CircleDollarSign, ClipboardCheck, Clock3, Package, Plus, Wrench } from 'lucide-react'
-import { assinarMudancasDemo, listarOrdensDemo } from '../data/demo-store'
+import { listarOrdens, modoDados, type OrdemCompleta } from '../data/repository'
+import { obterSessaoInterna, podeGerenciarOperacao, type SessaoInterna } from '../lib/auth'
+import { supabaseConfigurado } from '../lib/supabase'
 
 export const Route = createFileRoute('/')({ component: Dashboard })
 
@@ -15,16 +17,34 @@ const statusLabel = {
   entregue: 'Entregue',
 } as const
 
-function useOrdensDemo() {
-  return useSyncExternalStore(
-    assinarMudancasDemo,
-    listarOrdensDemo,
-    () => [],
-  )
-}
-
 function Dashboard() {
-  const ordens = useOrdensDemo()
+  const configurado = supabaseConfigurado()
+  const [ordens, setOrdens] = useState<OrdemCompleta[]>([])
+  const [sessao, setSessao] = useState<SessaoInterna | null>(null)
+  const [carregando, setCarregando] = useState(true)
+  const [erro, setErro] = useState('')
+
+  useEffect(() => {
+    let ativo = true
+    void Promise.all([
+      listarOrdens(),
+      configurado ? obterSessaoInterna() : Promise.resolve(null),
+    ])
+      .then(([registros, sessaoAtual]) => {
+        if (!ativo) return
+        setOrdens(registros)
+        setSessao(sessaoAtual)
+      })
+      .catch((error) => {
+        if (ativo) setErro(error instanceof Error ? error.message : 'Não foi possível carregar o painel.')
+      })
+      .finally(() => {
+        if (ativo) setCarregando(false)
+      })
+    return () => { ativo = false }
+  }, [configurado])
+
+  const podeCriar = !configurado || (sessao ? podeGerenciarOperacao(sessao.perfil.papel) : false)
   const abertas = ordens.filter(({ ordem }) => ordem.status !== 'entregue').length
   const aguardandoAprovacao = ordens.filter(({ ordem }) => ordem.status === 'orcamento_enviado').length
   const aguardandoPeca = ordens.filter(({ ordem }) => ordem.status === 'aguardando_peca').length
@@ -38,12 +58,21 @@ function Dashboard() {
     { label: 'Prontas para entrega', valor: String(prontas), icon: ClipboardCheck, detalhe: 'Serviços finalizados' },
   ]
 
+  if (carregando) {
+    return <section className="empty-state"><div className="empty-icon">OS</div><h2>Carregando operação</h2><p>Atualizando os indicadores da oficina.</p></section>
+  }
+
   return (
     <>
       <header className="topbar">
         <div><span className="eyebrow">PAINEL OPERACIONAL</span><h1>Visão geral</h1></div>
-        <div className="dashboard-actions"><span className="status"><span /> Modo demonstração</span><Link className="primary-action" to="/os/nova"><Plus size={17} /> Nova OS</Link></div>
+        <div className="dashboard-actions">
+          <span className="status"><span /> {modoDados === 'demo' ? 'Modo demonstração' : 'Supabase conectado'}</span>
+          {podeCriar && <Link className="primary-action" to="/os/nova"><Plus size={17} /> Nova OS</Link>}
+        </div>
       </header>
+
+      {erro && <p className="form-error">{erro}</p>}
 
       <section className="ops-summary">
         <div>
@@ -59,7 +88,10 @@ function Dashboard() {
       </section>
 
       <section className="section-block compact-section">
-        <div className="section-heading"><div><span className="eyebrow">STATUS DA OFICINA</span><h3>Indicadores operacionais</h3></div><p>Os números abaixo refletem apenas as OS criadas neste navegador durante o Preview.</p></div>
+        <div className="section-heading">
+          <div><span className="eyebrow">STATUS DA OFICINA</span><h3>Indicadores operacionais</h3></div>
+          <p>{modoDados === 'demo' ? 'Indicadores calculados com os dados locais deste navegador.' : 'Indicadores calculados com os registros persistidos no Supabase.'}</p>
+        </div>
         <div className="metric-grid">
           {indicadores.map(({ label, valor, icon: Icon, detalhe }) => (
             <article className="metric-card operational-card" key={label}>
@@ -76,7 +108,11 @@ function Dashboard() {
         <article className="panel recent-panel">
           <div className="section-title"><div><span className="eyebrow">MOVIMENTAÇÃO</span><h2>Ordens recentes</h2></div><Link className="text-link" to="/os">Ver todas <ArrowRight size={14} /></Link></div>
           {recentes.length === 0 ? (
-            <div className="dashboard-empty"><div className="empty-icon">OS</div><div><strong>Nenhuma OS criada ainda</strong><p>Abra a primeira ordem para começar a preencher o painel operacional.</p></div><Link className="secondary-action" to="/os/nova">Criar primeira OS</Link></div>
+            <div className="dashboard-empty">
+              <div className="empty-icon">OS</div>
+              <div><strong>Nenhuma OS criada ainda</strong><p>Quando a primeira ordem for aberta, ela aparecerá aqui.</p></div>
+              {podeCriar && <Link className="secondary-action" to="/os/nova">Criar primeira OS</Link>}
+            </div>
           ) : (
             <div className="recent-list">
               {recentes.map(({ ordem, cliente, item }) => (
@@ -94,9 +130,9 @@ function Dashboard() {
         <aside className="panel action-panel">
           <span className="eyebrow">ATALHOS</span>
           <h2>Ações rápidas</h2>
-          <p>Os caminhos mais usados na recepção ficam sempre à mão.</p>
+          <p>{podeCriar ? 'Os caminhos mais usados na recepção ficam sempre à mão.' : 'Seu perfil técnico está focado na execução e consulta das ordens.'}</p>
           <div className="quick-actions">
-            <Link to="/os/nova"><Plus size={18} /><span><strong>Abrir nova OS</strong><small>Cliente, item e problema relatado</small></span></Link>
+            {podeCriar && <Link to="/os/nova"><Plus size={18} /><span><strong>Abrir nova OS</strong><small>Cliente, item e problema relatado</small></span></Link>}
             <Link to="/os"><Wrench size={18} /><span><strong>Ver operação</strong><small>Acompanhar todas as ordens</small></span></Link>
           </div>
           <div className="finance-placeholder"><CircleDollarSign size={18} /><div><span>Financeiro</span><strong>Entra após cobrança Pix</strong></div></div>
