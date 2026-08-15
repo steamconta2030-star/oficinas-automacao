@@ -1,6 +1,12 @@
 import { getSupabaseClient, supabaseConfigurado } from '../lib/supabase'
-import type { Cliente, ItemAtendido, OrdemServico } from '../domain/entities'
-import { criarOrdemDemo, listarOrdensDemo, obterOrdemDemo } from './demo-store'
+import type { Cliente, ItemAtendido, Orcamento, OrcamentoItem, OrdemServico } from '../domain/entities'
+import {
+  criarOrdemDemo,
+  enviarOrcamentoDemo,
+  listarOrdensDemo,
+  obterOrdemDemo,
+  salvarOrcamentoDemo,
+} from './demo-store'
 
 export type NovaOrdemInput = {
   clienteNome: string
@@ -15,6 +21,7 @@ export type OrdemCompleta = {
   ordem: OrdemServico
   cliente?: Cliente
   item?: ItemAtendido
+  orcamento?: Orcamento
 }
 
 type OrdemRow = {
@@ -29,6 +36,22 @@ type OrdemRow = {
   updated_at: string
   clientes?: { id: string; nome: string; telefone: string; email: string | null; created_at: string } | null
   itens_atendidos?: { id: string; cliente_id: string; tipo: ItemAtendido['tipo']; identificacao: string; descricao: string } | null
+}
+
+type OrcamentoPayload = {
+  id: string
+  ordem_servico_id: string
+  status: Orcamento['status']
+  token_publico: string
+  enviado_em: string | null
+  decidido_em: string | null
+  itens: Array<{
+    id: string
+    tipo: OrcamentoItem['tipo']
+    descricao: string
+    quantidade: number | string
+    valor_unitario: number | string
+  }>
 }
 
 export const modoDados = supabaseConfigurado() ? 'supabase' : 'demo'
@@ -60,6 +83,25 @@ function mapOrdem(row: OrdemRow): OrdemCompleta {
       identificacao: row.itens_atendidos.identificacao,
       descricao: row.itens_atendidos.descricao,
     } : undefined,
+  }
+}
+
+function mapOrcamento(payload: OrcamentoPayload | null): Orcamento | undefined {
+  if (!payload) return undefined
+  return {
+    id: payload.id,
+    ordemServicoId: payload.ordem_servico_id,
+    status: payload.status,
+    tokenPublico: payload.token_publico,
+    enviadoEm: payload.enviado_em ?? undefined,
+    decididoEm: payload.decidido_em ?? undefined,
+    itens: (payload.itens ?? []).map((item) => ({
+      id: item.id,
+      tipo: item.tipo,
+      descricao: item.descricao,
+      quantidade: Number(item.quantidade),
+      valorUnitario: Number(item.valor_unitario),
+    })),
   }
 }
 
@@ -101,6 +143,15 @@ export async function listarClientes(): Promise<Cliente[]> {
   }))
 }
 
+export async function obterOrcamento(ordemId: string): Promise<Orcamento | undefined> {
+  const supabase = getSupabaseClient()
+  if (!supabase) return obterOrdemDemo(ordemId)?.orcamento
+
+  const { data, error } = await supabase.rpc('obter_orcamento_os', { p_ordem_id: ordemId })
+  if (error) throw error
+  return mapOrcamento(data as OrcamentoPayload | null)
+}
+
 export async function obterOrdem(id: string): Promise<OrdemCompleta | null> {
   const supabase = getSupabaseClient()
   if (!supabase) return obterOrdemDemo(id) ?? null
@@ -112,12 +163,21 @@ export async function obterOrdem(id: string): Promise<OrdemCompleta | null> {
     .maybeSingle()
 
   if (error) throw error
-  return data ? mapOrdem(data as unknown as OrdemRow) : null
+  if (!data) return null
+
+  const registro = mapOrdem(data as unknown as OrdemRow)
+  registro.orcamento = await obterOrcamento(id)
+  return registro
 }
 
 export async function criarOrdem(input: NovaOrdemInput): Promise<OrdemCompleta> {
   const supabase = getSupabaseClient()
-  if (!supabase) return criarOrdemDemo(input)
+  if (!supabase) {
+    const ordem = criarOrdemDemo(input)
+    const registro = obterOrdemDemo(ordem.id)
+    if (!registro) throw new Error('A ordem criada não pôde ser carregada.')
+    return registro
+  }
 
   const { data, error } = await supabase.rpc('criar_ordem_servico', {
     p_cliente_nome: input.clienteNome.trim(),
@@ -129,10 +189,43 @@ export async function criarOrdem(input: NovaOrdemInput): Promise<OrdemCompleta> 
   })
 
   if (error) throw error
-  const id = typeof data === 'string' ? data : data?.id
+  const primeiraLinha = Array.isArray(data) ? data[0] : data
+  const id = typeof primeiraLinha === 'string' ? primeiraLinha : primeiraLinha?.ordem_id ?? primeiraLinha?.id
   if (!id) throw new Error('A ordem foi criada, mas o identificador não foi retornado.')
 
   const criada = await obterOrdem(id)
   if (!criada) throw new Error('A ordem criada não pôde ser carregada.')
   return criada
+}
+
+export async function salvarOrcamento(ordemId: string, itens: OrcamentoItem[]) {
+  const supabase = getSupabaseClient()
+  if (!supabase) return salvarOrcamentoDemo(ordemId, itens)
+
+  const { error } = await supabase.rpc('salvar_orcamento_os', {
+    p_ordem_id: ordemId,
+    p_itens: itens.map((item) => ({
+      tipo: item.tipo,
+      descricao: item.descricao,
+      quantidade: item.quantidade,
+      valor_unitario: item.valorUnitario,
+    })),
+  })
+  if (error) throw error
+
+  const salvo = await obterOrcamento(ordemId)
+  if (!salvo) throw new Error('O orçamento salvo não pôde ser recarregado.')
+  return salvo
+}
+
+export async function enviarOrcamento(ordemId: string) {
+  const supabase = getSupabaseClient()
+  if (!supabase) return enviarOrcamentoDemo(ordemId)
+
+  const { error } = await supabase.rpc('enviar_orcamento_os', { p_ordem_id: ordemId })
+  if (error) throw error
+
+  const enviado = await obterOrcamento(ordemId)
+  if (!enviado) throw new Error('O orçamento enviado não pôde ser recarregado.')
+  return enviado
 }
