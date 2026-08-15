@@ -1,43 +1,52 @@
 # Oficinas Automação
 
-Base inicial para uma plataforma web de automação de oficinas e processos operacionais.
+PWA para automação dos processos essenciais de pequenas oficinas, com a **Ordem de Serviço (OS)** como núcleo do produto.
 
-## Stack
+## Produto
 
-- React
-- TypeScript
-- Vite
-- Tailwind CSS
+Fluxo alvo:
 
-## Objetivo inicial
+`Agendamento → OS → Diagnóstico/Orçamento → Aprovação → Execução → Cobrança`
 
-Criar uma fundação simples, organizada e escalável para evoluir em ondas, adicionando módulos de clientes, ordens de serviço, estoque, financeiro, automações e integrações conforme as regras de negócio forem definidas.
+O projeto é deliberadamente enxuto. Não é um ERP genérico e funcionalidades fora desse fluxo só entram após validação real.
 
-## Executando localmente
+## Stack alvo
+
+- React 19 + TypeScript strict
+- TanStack Start + TanStack Router
+- TanStack Query
+- Tailwind CSS 4
+- Supabase (Postgres, Auth e Storage)
+- PWA
+- Pix QR Code
+- Vercel
+
+## Ondas
+
+1. **MVP:** cliente, item, OS, orçamento/aprovação e Pix
+2. **Operação:** agenda, estoque enxuto e dashboard
+3. **Refinamento:** autoagendamento, WhatsApp e relatórios
+4. **Validação:** piloto em oficina real e ajustes por uso
+
+## Documentação
+
+- [`docs/ESCOPO.md`](docs/ESCOPO.md) — escopo oficial v0.1
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — limites de domínio, segurança e invariantes
+
+## Desenvolvimento
 
 ```bash
 npm install
 npm run dev
 ```
 
-## Scripts
+Validação:
 
-- `npm run dev` — ambiente de desenvolvimento
-- `npm run build` — build de produção
-- `npm run preview` — pré-visualização do build
-- `npm run lint` — validação do código
-
-## Estrutura inicial
-
-```text
-src/
-  components/
-  pages/
-  styles/
-  App.tsx
-  main.tsx
+```bash
+npm run lint
+npm run build
 ```
 
-## Status
+## Estado atual
 
-Projeto em estruturação inicial.
+Fundação técnica em evolução. O domínio de Ordem de Serviço já está definido em `src/domain/service-order.ts`. O próximo marco é implementar o primeiro fluxo vertical completo do MVP e conectar o Supabase.
