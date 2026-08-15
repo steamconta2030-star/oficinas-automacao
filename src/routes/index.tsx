@@ -1,25 +1,106 @@
+import { useSyncExternalStore } from 'react'
 import { Link, createFileRoute } from '@tanstack/react-router'
-import { ArrowRight, CircleDollarSign, ClipboardCheck, Clock3, Wrench } from 'lucide-react'
+import { ArrowRight, CircleDollarSign, ClipboardCheck, Clock3, PackageClock, Plus, Wrench } from 'lucide-react'
+import { assinarMudancasDemo, listarOrdensDemo } from '../data/demo-store'
 
 export const Route = createFileRoute('/')({ component: Dashboard })
 
-const indicadores = [
-  { label: 'OS abertas', valor: '—', icon: Wrench },
-  { label: 'Aguardando aprovação', valor: '—', icon: Clock3 },
-  { label: 'Prontas', valor: '—', icon: ClipboardCheck },
-  { label: 'Faturamento', valor: '—', icon: CircleDollarSign },
-]
+const statusLabel = {
+  aguardando_avaliacao: 'Aguardando avaliação',
+  orcamento_enviado: 'Aguardando aprovação',
+  aprovado: 'Aprovado',
+  em_execucao: 'Em execução',
+  aguardando_peca: 'Aguardando peça',
+  pronto: 'Pronto',
+  entregue: 'Entregue',
+} as const
+
+function useOrdensDemo() {
+  return useSyncExternalStore(
+    assinarMudancasDemo,
+    listarOrdensDemo,
+    () => [],
+  )
+}
 
 function Dashboard() {
+  const ordens = useOrdensDemo()
+  const abertas = ordens.filter(({ ordem }) => ordem.status !== 'entregue').length
+  const aguardandoAprovacao = ordens.filter(({ ordem }) => ordem.status === 'orcamento_enviado').length
+  const aguardandoPeca = ordens.filter(({ ordem }) => ordem.status === 'aguardando_peca').length
+  const prontas = ordens.filter(({ ordem }) => ordem.status === 'pronto').length
+  const recentes = ordens.slice(0, 5)
+
+  const indicadores = [
+    { label: 'OS abertas', valor: String(abertas), icon: Wrench, detalhe: 'Em qualquer etapa antes da entrega' },
+    { label: 'Aguardando aprovação', valor: String(aguardandoAprovacao), icon: Clock3, detalhe: 'Orçamentos enviados ao cliente' },
+    { label: 'Aguardando peça', valor: String(aguardandoPeca), icon: PackageClock, detalhe: 'Serviços parados por material' },
+    { label: 'Prontas para entrega', valor: String(prontas), icon: ClipboardCheck, detalhe: 'Serviços finalizados' },
+  ]
+
   return (
     <>
-      <header className="topbar"><div><span className="eyebrow">PAINEL OPERACIONAL</span><h1>Visão geral</h1></div><span className="status"><span /> Onda 1</span></header>
-      <section className="hero compact-hero">
-        <div><span className="pill">Ordem de Serviço no centro</span><h2>Da entrada à autorização, sem depender da memória.</h2><p>O primeiro fluxo conecta cliente, item atendido, OS e orçamento. Integrações externas só entram depois desta base estar validada.</p><Link className="primary-action" to="/os">Ver ordens de serviço <ArrowRight size={17} /></Link></div>
+      <header className="topbar">
+        <div><span className="eyebrow">PAINEL OPERACIONAL</span><h1>Visão geral</h1></div>
+        <div className="dashboard-actions"><span className="status"><span /> Modo demonstração</span><Link className="primary-action" to="/os/nova"><Plus size={17} /> Nova OS</Link></div>
+      </header>
+
+      <section className="ops-summary">
+        <div>
+          <span className="eyebrow">FLUXO DO DIA</span>
+          <h2>{abertas === 0 ? 'A operação começa com a primeira ordem de serviço.' : `${abertas} ${abertas === 1 ? 'serviço está' : 'serviços estão'} em andamento.`}</h2>
+          <p>Use este painel para enxergar rapidamente onde cada serviço está parado e o que precisa de ação da equipe.</p>
+        </div>
+        <div className="summary-side">
+          <span>Prioridade agora</span>
+          <strong>{aguardandoAprovacao > 0 ? `${aguardandoAprovacao} aguardando cliente` : aguardandoPeca > 0 ? `${aguardandoPeca} aguardando peça` : prontas > 0 ? `${prontas} pronta(s) para entrega` : 'Nenhuma pendência crítica'}</strong>
+          <Link to="/os">Abrir operação <ArrowRight size={15} /></Link>
+        </div>
       </section>
-      <section className="section-block">
-        <div className="section-heading"><div><span className="eyebrow">OPERAÇÃO</span><h3>Indicadores</h3></div><p>Os números aparecem quando o banco for conectado. Não usamos dados fictícios no painel.</p></div>
-        <div className="metric-grid">{indicadores.map(({ label, valor, icon: Icon }) => <article className="metric-card" key={label}><Icon size={20} /><span>{label}</span><strong>{valor}</strong></article>)}</div>
+
+      <section className="section-block compact-section">
+        <div className="section-heading"><div><span className="eyebrow">STATUS DA OFICINA</span><h3>Indicadores operacionais</h3></div><p>Os números abaixo refletem apenas as OS criadas neste navegador durante o Preview.</p></div>
+        <div className="metric-grid">
+          {indicadores.map(({ label, valor, icon: Icon, detalhe }) => (
+            <article className="metric-card operational-card" key={label}>
+              <div className="metric-icon"><Icon size={19} /></div>
+              <strong>{valor.padStart(2, '0')}</strong>
+              <span>{label}</span>
+              <small>{detalhe}</small>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="dashboard-grid section-block compact-section">
+        <article className="panel recent-panel">
+          <div className="section-title"><div><span className="eyebrow">MOVIMENTAÇÃO</span><h2>Ordens recentes</h2></div><Link className="text-link" to="/os">Ver todas <ArrowRight size={14} /></Link></div>
+          {recentes.length === 0 ? (
+            <div className="dashboard-empty"><div className="empty-icon">OS</div><div><strong>Nenhuma OS criada ainda</strong><p>Abra a primeira ordem para começar a preencher o painel operacional.</p></div><Link className="secondary-action" to="/os/nova">Criar primeira OS</Link></div>
+          ) : (
+            <div className="recent-list">
+              {recentes.map(({ ordem, cliente, item }) => (
+                <Link className="recent-row" key={ordem.id} to="/os/$osId" params={{ osId: ordem.id }}>
+                  <div className="os-number">#{String(ordem.numero).padStart(4, '0')}</div>
+                  <div className="recent-main"><strong>{cliente?.nome ?? 'Cliente não identificado'}</strong><span>{item?.identificacao ?? item?.descricao ?? 'Item não identificado'}</span></div>
+                  <span className={`status-badge status-${ordem.status}`}>{statusLabel[ordem.status]}</span>
+                  <ArrowRight size={16} />
+                </Link>
+              ))}
+            </div>
+          )}
+        </article>
+
+        <aside className="panel action-panel">
+          <span className="eyebrow">ATALHOS</span>
+          <h2>Ações rápidas</h2>
+          <p>Os caminhos mais usados na recepção ficam sempre à mão.</p>
+          <div className="quick-actions">
+            <Link to="/os/nova"><Plus size={18} /><span><strong>Abrir nova OS</strong><small>Cliente, item e problema relatado</small></span></Link>
+            <Link to="/os"><Wrench size={18} /><span><strong>Ver operação</strong><small>Acompanhar todas as ordens</small></span></Link>
+          </div>
+          <div className="finance-placeholder"><CircleDollarSign size={18} /><div><span>Financeiro</span><strong>Entra após cobrança Pix</strong></div></div>
+        </aside>
       </section>
     </>
   )
