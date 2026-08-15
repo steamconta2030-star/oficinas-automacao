@@ -7,6 +7,8 @@
     "dev": "vite dev",
     "build": "vite build && tsc --noEmit",
     "lint": "eslint .",
+    "test": "vitest run",
+    "check": "npm run lint && npm run test && npm run build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -33,6 +35,7 @@
     "typescript": "latest",
     "typescript-eslint": "latest",
     "vite": "latest",
-    "vite-plugin-pwa": "latest"
+    "vite-plugin-pwa": "latest",
+    "vitest": "latest"
   }
 }
