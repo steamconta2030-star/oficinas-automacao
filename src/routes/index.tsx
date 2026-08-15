@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { Link, createFileRoute } from '@tanstack/react-router'
-import { ArrowRight, CircleDollarSign, ClipboardCheck, Clock3, PackageClock, Plus, Wrench } from 'lucide-react'
+import { ArrowRight, CircleDollarSign, ClipboardCheck, Clock3, Package, Plus, Wrench } from 'lucide-react'
 import { assinarMudancasDemo, listarOrdensDemo } from '../data/demo-store'
 
 export const Route = createFileRoute('/')({ component: Dashboard })
@@ -34,7 +34,7 @@ function Dashboard() {
   const indicadores = [
     { label: 'OS abertas', valor: String(abertas), icon: Wrench, detalhe: 'Em qualquer etapa antes da entrega' },
     { label: 'Aguardando aprovação', valor: String(aguardandoAprovacao), icon: Clock3, detalhe: 'Orçamentos enviados ao cliente' },
-    { label: 'Aguardando peça', valor: String(aguardandoPeca), icon: PackageClock, detalhe: 'Serviços parados por material' },
+    { label: 'Aguardando peça', valor: String(aguardandoPeca), icon: Package, detalhe: 'Serviços parados por material' },
     { label: 'Prontas para entrega', valor: String(prontas), icon: ClipboardCheck, detalhe: 'Serviços finalizados' },
   ]
 
