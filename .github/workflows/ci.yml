@@ -2,17 +2,23 @@ name: CI
 
 on:
   push:
-    branches: [main, agent/onda1-nucleo-os]
+    branches:
+      - main
+      - 'agent/**'
   pull_request:
     branches: [main]
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,3 +42,6 @@ jobs:
 
       - name: Build and typecheck
         run: npm run build
+
+      - name: Code metrics
+        run: npm run metrics
