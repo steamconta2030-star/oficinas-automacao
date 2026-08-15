@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { enviarOrcamento, obterOrdem, salvarOrcamento, type OrdemCompleta } from '../data/repository'
 import { calcularTotalOrcamento, type OrcamentoItem } from '../domain/entities'
@@ -23,6 +23,9 @@ function DetalheOS() {
   const [carregando, setCarregando] = useState(true)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
+  const [itemEditandoId, setItemEditandoId] = useState<string | null>(null)
+  const [confirmarZero, setConfirmarZero] = useState(false)
+  const enviandoRef = useRef(false)
 
   const configurado = supabaseConfigurado()
   const podeEditar = !configurado || (sessao ? podeGerenciarOperacao(sessao.perfil.papel) : false)
@@ -56,20 +59,38 @@ function DetalheOS() {
   const total = useMemo(() => calcularTotalOrcamento(itens), [itens])
   const statusOrcamento = registro?.orcamento?.status ?? 'rascunho'
   const editavel = podeEditar && statusOrcamento === 'rascunho'
+  const itemEditando = itemEditandoId ? itens.find((item) => item.id === itemEditandoId) : undefined
 
   async function recarregar() {
     const atualizado = await obterOrdem(osId)
     setRegistro(atualizado)
   }
 
+  async function persistirItens(proximosItens: OrcamentoItem[]) {
+    if (enviandoRef.current) return false
+    enviandoRef.current = true
+    setSalvando(true)
+    try {
+      await salvarOrcamento(osId, proximosItens)
+      await recarregar()
+      return true
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Não foi possível salvar o orçamento.')
+      return false
+    } finally {
+      enviandoRef.current = false
+      setSalvando(false)
+    }
+  }
+
   async function addItem(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!editavel) return
+    if (!editavel || enviandoRef.current) return
 
     const formElement = event.currentTarget
     const form = new FormData(formElement)
     const novoItem: OrcamentoItem = {
-      id: '',
+      id: itemEditando?.id ?? '',
       tipo: String(form.get('tipo')) as 'peca' | 'servico',
       descricao: String(form.get('descricao')).trim(),
       quantidade: parseDecimalInput(form.get('quantidade')),
@@ -81,31 +102,46 @@ function DetalheOS() {
       return
     }
 
-    setErro('')
-    setSalvando(true)
-    try {
-      await salvarOrcamento(osId, [...itens, novoItem])
-      formElement.reset()
-      const quantidade = formElement.elements.namedItem('quantidade')
-      if (quantidade instanceof HTMLInputElement) quantidade.value = '1'
-      await recarregar()
-    } catch (error) {
-      setErro(error instanceof Error ? error.message : 'Não foi possível salvar o orçamento.')
-    } finally {
-      setSalvando(false)
+    if (novoItem.valorUnitario === 0 && !confirmarZero) {
+      setConfirmarZero(true)
+      setErro('Valor R$ 0,00 detectado. Confira os dados e clique novamente para confirmar item sem cobrança.')
+      return
     }
+
+    setErro('')
+    const proximosItens = itemEditando
+      ? itens.map((item) => item.id === itemEditando.id ? novoItem : item)
+      : [...itens, novoItem]
+    const salvo = await persistirItens(proximosItens)
+    if (!salvo) return
+
+    formElement.reset()
+    const quantidade = formElement.elements.namedItem('quantidade')
+    if (quantidade instanceof HTMLInputElement) quantidade.value = '1'
+    setItemEditandoId(null)
+    setConfirmarZero(false)
+  }
+
+  async function removerItem(itemId: string) {
+    if (!editavel || enviandoRef.current) return
+    setErro('')
+    const salvo = await persistirItens(itens.filter((item) => item.id !== itemId))
+    if (salvo && itemEditandoId === itemId) setItemEditandoId(null)
   }
 
   async function enviar() {
-    if (!editavel || itens.length === 0) return
+    if (!editavel || itens.length === 0 || enviandoRef.current) return
+    enviandoRef.current = true
     setErro('')
     setSalvando(true)
     try {
       await enviarOrcamento(osId)
       await recarregar()
+      setItemEditandoId(null)
     } catch (error) {
       setErro(error instanceof Error ? error.message : 'Não foi possível enviar o orçamento.')
     } finally {
+      enviandoRef.current = false
       setSalvando(false)
     }
   }
@@ -177,16 +213,23 @@ function DetalheOS() {
             <strong>{orcamentoItem.descricao}</strong>
             <span>{orcamentoItem.quantidade} × {money(orcamentoItem.valorUnitario)}</span>
             <b>{money(orcamentoItem.quantidade * orcamentoItem.valorUnitario)}</b>
+            {editavel && (
+              <span className="budget-actions">
+                <button type="button" onClick={() => { setItemEditandoId(orcamentoItem.id); setConfirmarZero(false); setErro('') }} disabled={salvando}>Editar</button>
+                <button type="button" onClick={() => void removerItem(orcamentoItem.id)} disabled={salvando}>Excluir</button>
+              </span>
+            )}
           </div>
         ))}
 
         {editavel && (
-          <form className="inline-form" onSubmit={addItem}>
-            <select name="tipo" defaultValue="servico"><option value="servico">Serviço</option><option value="peca">Peça</option></select>
-            <input name="descricao" placeholder="Descrição" required />
-            <input name="quantidade" type="number" min="1" step="1" defaultValue="1" inputMode="numeric" aria-label="Quantidade" required />
-            <input name="valor" type="text" inputMode="decimal" placeholder="Valor (ex.: 120,00)" aria-label="Valor unitário" required />
-            <button type="submit" disabled={salvando}>{salvando ? 'Salvando...' : 'Adicionar'}</button>
+          <form className="inline-form" key={itemEditando?.id ?? 'novo'} onSubmit={addItem}>
+            <select name="tipo" defaultValue={itemEditando?.tipo ?? 'servico'}><option value="servico">Serviço</option><option value="peca">Peça</option></select>
+            <input name="descricao" placeholder="Descrição" defaultValue={itemEditando?.descricao ?? ''} onChange={() => setConfirmarZero(false)} required />
+            <input name="quantidade" type="number" min="1" step="1" defaultValue={itemEditando?.quantidade ?? 1} inputMode="numeric" aria-label="Quantidade" onChange={() => setConfirmarZero(false)} required />
+            <input name="valor" type="text" inputMode="decimal" placeholder="Valor (ex.: 120,00)" defaultValue={itemEditando ? String(itemEditando.valorUnitario).replace('.', ',') : ''} aria-label="Valor unitário" onChange={() => setConfirmarZero(false)} required />
+            <button type="submit" disabled={salvando}>{salvando ? 'Salvando...' : itemEditando ? 'Salvar alteração' : confirmarZero ? 'Confirmar R$ 0,00' : 'Adicionar'}</button>
+            {itemEditando && <button className="secondary-action" type="button" onClick={() => { setItemEditandoId(null); setConfirmarZero(false); setErro('') }} disabled={salvando}>Cancelar</button>}
           </form>
         )}
       </section>
