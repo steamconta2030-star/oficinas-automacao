@@ -7,5 +7,13 @@ export default defineConfig({
   server: {
     port: 3000,
   },
-  plugins: [tanstackStart(), tailwindcss(), viteReact()],
+  plugins: [
+    tanstackStart({
+      server: {
+        preset: 'vercel',
+      },
+    }),
+    tailwindcss(),
+    viteReact(),
+  ],
 })
