@@ -1,16 +1,39 @@
-import { useState } from 'react'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useEffect, useState } from 'react'
+import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { criarOrdem, modoDados } from '../data/repository'
+import { obterSessaoInterna, podeGerenciarOperacao } from '../lib/auth'
+import { supabaseConfigurado } from '../lib/supabase'
 
 export const Route = createFileRoute('/os/nova')({ component: NovaOS })
 
 function NovaOS() {
   const navigate = useNavigate()
+  const configurado = supabaseConfigurado()
+  const [autorizado, setAutorizado] = useState(!configurado)
+  const [checkingPermission, setCheckingPermission] = useState(configurado)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
+  useEffect(() => {
+    if (!configurado) return
+    let ativo = true
+    void obterSessaoInterna()
+      .then((sessao) => {
+        if (!ativo) return
+        setAutorizado(Boolean(sessao && podeGerenciarOperacao(sessao.perfil.papel)))
+      })
+      .catch(() => {
+        if (ativo) setAutorizado(false)
+      })
+      .finally(() => {
+        if (ativo) setCheckingPermission(false)
+      })
+    return () => { ativo = false }
+  }, [configurado])
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!autorizado) return
     setError('')
     const form = new FormData(event.currentTarget)
     const input = {
@@ -34,6 +57,14 @@ function NovaOS() {
       setError(err instanceof Error ? err.message : 'Não foi possível criar a ordem de serviço.')
       setSaving(false)
     }
+  }
+
+  if (checkingPermission) {
+    return <section className="empty-state"><div className="empty-icon">OS</div><h2>Verificando permissão</h2><p>Validando seu perfil antes de abrir uma nova ordem.</p></section>
+  }
+
+  if (!autorizado) {
+    return <section className="empty-state"><div className="empty-icon">!</div><h2>Abertura de OS restrita</h2><p>Seu perfil pode consultar e executar ordens, mas novas OS são abertas por dono ou recepção.</p><Link to="/os" className="secondary-action">Voltar para ordens</Link></section>
   }
 
   return (
