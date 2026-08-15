@@ -12,6 +12,10 @@ function money(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 }
 
+function parseDecimalInput(value: FormDataEntryValue | null) {
+  return Number(String(value ?? '').trim().replace(',', '.'))
+}
+
 function DetalheOS() {
   const { osId } = Route.useParams()
   const [registro, setRegistro] = useState<OrdemCompleta | null>(null)
@@ -67,12 +71,12 @@ function DetalheOS() {
       id: '',
       tipo: String(form.get('tipo')) as 'peca' | 'servico',
       descricao: String(form.get('descricao')).trim(),
-      quantidade: Number(form.get('quantidade')),
-      valorUnitario: Number(form.get('valor')),
+      quantidade: parseDecimalInput(form.get('quantidade')),
+      valorUnitario: parseDecimalInput(form.get('valor')),
     }
 
-    if (!novoItem.descricao || novoItem.quantidade <= 0 || novoItem.valorUnitario < 0) {
-      setErro('Revise descrição, quantidade e valor do item.')
+    if (!novoItem.descricao || !Number.isInteger(novoItem.quantidade) || novoItem.quantidade <= 0 || !Number.isFinite(novoItem.valorUnitario) || novoItem.valorUnitario < 0) {
+      setErro('Use quantidade inteira maior que zero e informe um valor válido.')
       return
     }
 
@@ -81,6 +85,8 @@ function DetalheOS() {
     try {
       await salvarOrcamento(osId, [...itens, novoItem])
       event.currentTarget.reset()
+      const quantidade = event.currentTarget.elements.namedItem('quantidade')
+      if (quantidade instanceof HTMLInputElement) quantidade.value = '1'
       await recarregar()
     } catch (error) {
       setErro(error instanceof Error ? error.message : 'Não foi possível salvar o orçamento.')
@@ -177,8 +183,8 @@ function DetalheOS() {
           <form className="inline-form" onSubmit={addItem}>
             <select name="tipo" defaultValue="servico"><option value="servico">Serviço</option><option value="peca">Peça</option></select>
             <input name="descricao" placeholder="Descrição" required />
-            <input name="quantidade" type="number" min="0.001" step="0.001" defaultValue="1" required />
-            <input name="valor" type="number" min="0" step="0.01" placeholder="Valor" required />
+            <input name="quantidade" type="number" min="1" step="1" defaultValue="1" inputMode="numeric" aria-label="Quantidade" required />
+            <input name="valor" type="text" inputMode="decimal" placeholder="Valor (ex.: 120,00)" aria-label="Valor unitário" required />
             <button type="submit" disabled={salvando}>{salvando ? 'Salvando...' : 'Adicionar'}</button>
           </form>
         )}
