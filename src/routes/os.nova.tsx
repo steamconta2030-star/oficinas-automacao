@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { criarOrdemDemo } from '../data/demo-store'
+import { criarOrdem, modoDados } from '../data/repository'
 
 export const Route = createFileRoute('/os/nova')({ component: NovaOS })
 
@@ -9,7 +9,7 @@ function NovaOS() {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
     const form = new FormData(event.currentTarget)
@@ -25,21 +25,27 @@ function NovaOS() {
       setError('Preencha todos os campos obrigatórios.')
       return
     }
+
     setSaving(true)
-    const ordem = criarOrdemDemo(input)
-    void navigate({ to: '/os/$osId', params: { osId: ordem.id } })
+    try {
+      const criada = await criarOrdem(input)
+      await navigate({ to: '/os/$osId', params: { osId: criada.ordem.id } })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível criar a ordem de serviço.')
+      setSaving(false)
+    }
   }
 
   return (
     <>
       <header className="page-header"><div><span className="eyebrow">NOVA ORDEM</span><h1>Abertura de OS</h1><p>Fluxo curto para recepção: cliente, item e problema relatado.</p></div></header>
-      <div className="demo-banner">Modo de demonstração seguro: os dados ficam apenas neste navegador até a conexão autenticada com o Supabase.</div>
+      <div className="demo-banner">{modoDados === 'demo' ? 'Modo demonstração: os dados ficam apenas neste navegador.' : 'Modo conectado: a OS será persistida com segurança no Supabase.'}</div>
       <form className="form-card" onSubmit={handleSubmit}>
         <fieldset><legend>1. Cliente</legend><div className="form-grid"><label>Nome<input name="clienteNome" placeholder="Nome do cliente" required /></label><label>WhatsApp<input name="telefone" inputMode="tel" placeholder="(31) 99999-9999" required /></label></div></fieldset>
         <fieldset><legend>2. Item atendido</legend><div className="form-grid"><label>Tipo<select name="tipo" defaultValue="veiculo"><option value="veiculo">Veículo</option><option value="movel">Móvel</option><option value="equipamento">Equipamento</option><option value="outro">Outro</option></select></label><label>Identificação<input name="identificacao" placeholder="Placa, modelo ou nº de série" required /></label><label className="full-field">Descrição<input name="descricao" placeholder="Ex.: Fiat Strada 1.3 2023" required /></label></div></fieldset>
         <fieldset><legend>3. Problema relatado</legend><label>Relato do cliente<textarea name="problema" rows={5} placeholder="Registre com as palavras do cliente o motivo da entrada." required /></label></fieldset>
         {error && <p className="form-error">{error}</p>}
-        <div className="form-footer"><span>Nenhum dado real será enviado para serviços externos nesta etapa.</span><button type="submit" disabled={saving}>{saving ? 'Criando...' : 'Criar ordem de serviço'}</button></div>
+        <div className="form-footer"><span>{modoDados === 'demo' ? 'Nenhum dado será enviado para serviços externos.' : 'A criação usa uma operação atômica no banco.'}</span><button type="submit" disabled={saving}>{saving ? 'Criando...' : 'Criar ordem de serviço'}</button></div>
       </form>
     </>
   )
