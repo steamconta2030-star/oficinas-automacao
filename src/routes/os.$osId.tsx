@@ -66,7 +66,8 @@ function DetalheOS() {
     event.preventDefault()
     if (!editavel) return
 
-    const form = new FormData(event.currentTarget)
+    const formElement = event.currentTarget
+    const form = new FormData(formElement)
     const novoItem: OrcamentoItem = {
       id: '',
       tipo: String(form.get('tipo')) as 'peca' | 'servico',
@@ -84,8 +85,8 @@ function DetalheOS() {
     setSalvando(true)
     try {
       await salvarOrcamento(osId, [...itens, novoItem])
-      event.currentTarget.reset()
-      const quantidade = event.currentTarget.elements.namedItem('quantidade')
+      formElement.reset()
+      const quantidade = formElement.elements.namedItem('quantidade')
       if (quantidade instanceof HTMLInputElement) quantidade.value = '1'
       await recarregar()
     } catch (error) {
