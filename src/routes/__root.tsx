@@ -16,6 +16,7 @@ export const Route = createRootRoute({
     ],
   }),
   component: RootComponent,
+  notFoundComponent: NotFoundPage,
 })
 
 function RootComponent() {
@@ -25,6 +26,21 @@ function RootComponent() {
   return (
     <RootDocument>
       {rotaPublica ? <Outlet /> : <InternalShell />}
+    </RootDocument>
+  )
+}
+
+function NotFoundPage() {
+  return (
+    <RootDocument>
+      <main className="public-page">
+        <section className="public-card">
+          <span className="eyebrow">ERRO 404</span>
+          <h1>Página não encontrada</h1>
+          <p>O endereço informado não existe ou foi alterado.</p>
+          <Link className="secondary-action" to="/">Voltar para a visão geral</Link>
+        </section>
+      </main>
     </RootDocument>
   )
 }
